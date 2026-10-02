@@ -1,0 +1,1061 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Coilbound - Arena Coil</title>
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    background: #0a0a0a;
+    color: #e0e0e0;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    overflow: hidden;
+    height: 100%;
+    width: 100%;
+    position: fixed;
+    touch-action: none;
+  }
+  #game-container {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+  }
+  canvas {
+    display: block;
+    background: #111;
+    touch-action: none;
+    width: 100%;
+    height: 100%;
+  }
+  #ui {
+    position: absolute;
+    top: 0; left: 0; width: 100%; height: 100%;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 5;
+  }
+  .panel {
+    background: rgba(20, 25, 30, 0.96);
+    border-radius: 16px;
+    padding: 24px 28px;
+    max-width: 92vw;
+    width: 380px;
+    text-align: center;
+    pointer-events: auto;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.6);
+    border: 1px solid #2a2a2a;
+  }
+  .panel h1 {
+    font-size: 1.9rem;
+    font-weight: 700;
+    margin-bottom: 4px;
+  }
+  .panel .subtitle {
+    font-size: 0.7rem;
+    color: #888;
+    letter-spacing: 2px;
+    margin-bottom: 12px;
+  }
+  .panel p {
+    font-size: 0.88rem;
+    line-height: 1.4;
+    color: #bbb;
+    margin-bottom: 14px;
+  }
+  .controls {
+    text-align: left;
+    font-size: 0.82rem;
+    color: #aaa;
+    margin-bottom: 16px;
+  }
+  .controls div {
+    display: flex;
+    justify-content: space-between;
+    margin: 4px 0;
+  }
+  .controls span:first-child { color: #888; }
+  button, .btn {
+    width: 100%;
+    padding: 13px;
+    border: none;
+    border-radius: 10px;
+    font-size: 1.05rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s;
+    margin-bottom: 8px;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .btn-primary {
+    background: #e8e8e8;
+    color: #111;
+  }
+  .btn-primary:active { background: #fff; }
+  .btn-secondary {
+    background: #1a1a1a;
+    color: #ccc;
+    border: 1px solid #333;
+  }
+  .btn-secondary:active { background: #252525; }
+  .btn-danger {
+    background: #3a1a1a;
+    color: #f88;
+    border: 1px solid #522;
+  }
+  input[type="text"] {
+    width: 100%;
+    padding: 14px;
+    border-radius: 8px;
+    border: 1px solid #444;
+    background: #111;
+    color: #eee;
+    font-size: 1.25rem;
+    margin-bottom: 10px;
+    text-align: center;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+  }
+  #hud {
+    position: absolute;
+    top: max(10px, env(safe-area-inset-top));
+    left: max(10px, env(safe-area-inset-left));
+    font-size: 0.85rem;
+    color: #ccc;
+    pointer-events: none;
+    display: none;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    z-index: 10;
+  }
+  #room-hud {
+    position: absolute;
+    top: max(10px, env(safe-area-inset-top));
+    right: max(10px, env(safe-area-inset-right));
+    font-size: 0.8rem;
+    color: #9cf;
+    pointer-events: none;
+    display: none;
+    text-align: right;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+    z-index: 10;
+  }
+  #game-over, #lobby, #join-panel { display: none; }
+  .room-code {
+    font-size: 2.2rem;
+    font-weight: 800;
+    letter-spacing: 6px;
+    color: #7df;
+    background: #0d1118;
+    padding: 14px 10px;
+    border-radius: 10px;
+    margin: 12px 0;
+    border: 1px solid #2a3a4a;
+  }
+  .status {
+    font-size: 0.85rem;
+    color: #8a8;
+    margin: 8px 0;
+  }
+  .player-list {
+    text-align: left;
+    font-size: 0.85rem;
+    color: #aaa;
+    margin: 10px 0;
+    max-height: 120px;
+    overflow-y: auto;
+  }
+  .player-list div { padding: 4px 0; }
+
+  /* Joystick */
+  #joystick-zone {
+    position: absolute;
+    bottom: max(18px, env(safe-area-inset-bottom));
+    left: max(14px, env(safe-area-inset-left));
+    width: 140px;
+    height: 140px;
+    pointer-events: auto;
+    display: none;
+    z-index: 30;
+    touch-action: none;
+  }
+  #joystick-base {
+    position: absolute;
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    background: rgba(50, 60, 75, 0.65);
+    border: 3px solid rgba(140, 170, 200, 0.5);
+    left: 10px;
+    top: 10px;
+  }
+  #joystick-knob {
+    position: absolute;
+    width: 54px;
+    height: 54px;
+    border-radius: 50%;
+    background: rgba(100, 200, 255, 0.85);
+    border: 3px solid rgba(200, 240, 255, 0.95);
+    left: 43px;
+    top: 43px;
+    box-shadow: 0 0 14px rgba(100, 200, 255, 0.45);
+  }
+  #joystick-knob.active {
+    background: rgba(150, 230, 255, 1);
+  }
+
+  /* Action buttons */
+  #action-buttons {
+    position: absolute;
+    bottom: max(22px, env(safe-area-inset-bottom));
+    right: max(14px, env(safe-area-inset-right));
+    display: none;
+    flex-direction: column;
+    gap: 14px;
+    pointer-events: auto;
+    z-index: 30;
+  }
+  .action-btn {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    border: 3px solid rgba(255,255,255,0.28);
+    background: rgba(40, 50, 65, 0.7);
+    color: #ddd;
+    font-size: 0.68rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .action-btn.active {
+    background: rgba(100, 200, 255, 0.5);
+    border-color: rgba(160, 230, 255, 0.9);
+    transform: scale(0.93);
+  }
+  #boost-btn { color: #9df; }
+  #brake-btn { color: #fc9; }
+
+  @media (max-width: 500px) {
+    .panel { padding: 20px 16px; }
+    .panel h1 { font-size: 1.7rem; }
+    .room-code { font-size: 1.9rem; letter-spacing: 4px; }
+    #joystick-zone { width: 130px; height: 130px; }
+    #joystick-base { width: 110px; height: 110px; }
+    #joystick-knob { width: 48px; height: 48px; left: 41px; top: 41px; }
+    .action-btn { width: 58px; height: 58px; }
+  }
+</style>
+</head>
+<body>
+<div id="game-container">
+  <canvas id="c"></canvas>
+  <div id="ui">
+    <!-- 主選單 -->
+    <div id="start-screen" class="panel">
+      <div class="subtitle">ARENA COIL</div>
+      <h1>Coilbound</h1>
+      <p>單人吃豆成長，或與朋友連線對戰。</p>
+      <div class="controls">
+        <div><span>方向</span><span>左下搖桿 / A D</span></div>
+        <div><span>加速 / 煞車</span><span>右下按鈕 / W S</span></div>
+      </div>
+      <button class="btn btn-primary" id="start-btn">▶ 單人模式</button>
+      <button class="btn btn-secondary" id="create-btn">＋ 建立房間</button>
+      <button class="btn btn-secondary" id="join-btn">⇄ 加入房間</button>
+    </div>
+
+    <!-- 加入房間 -->
+    <div id="join-panel" class="panel">
+      <h1>加入房間</h1>
+      <p>輸入房主分享的 5～6 碼代碼</p>
+      <input type="text" id="join-code" placeholder="例如 K7X2P" maxlength="8" autocomplete="off" autocapitalize="characters">
+      <button class="btn btn-primary" id="do-join-btn">加入</button>
+      <button class="btn btn-secondary" id="back-join-btn">返回</button>
+      <div class="status" id="join-status"></div>
+    </div>
+
+    <!-- 大廳 -->
+    <div id="lobby" class="panel">
+      <h1>房間大廳</h1>
+      <div class="status" id="lobby-status">建立中...</div>
+      <div class="room-code" id="room-code">----</div>
+      <button class="btn btn-secondary" id="copy-btn" style="margin-bottom:12px;">複製代碼</button>
+      <div class="player-list" id="player-list"></div>
+      <button class="btn btn-primary" id="lobby-start-btn" style="display:none;">開始遊戲</button>
+      <button class="btn btn-danger" id="leave-btn">離開房間</button>
+    </div>
+
+    <!-- Game Over -->
+    <div id="game-over" class="panel">
+      <h2>You Burst!</h2>
+      <p id="final-score">Score: 0</p>
+      <button class="btn btn-primary" id="restart-btn">再玩一次</button>
+      <button class="btn btn-secondary" id="menu-btn">回主選單</button>
+    </div>
+  </div>
+
+  <div id="hud">Length: <span id="len">0</span> | Score: <span id="score">0</span></div>
+  <div id="room-hud"></div>
+
+  <div id="joystick-zone">
+    <div id="joystick-base"></div>
+    <div id="joystick-knob"></div>
+  </div>
+  <div id="action-buttons">
+    <div class="action-btn" id="boost-btn">BOOST</div>
+    <div class="action-btn" id="brake-btn">BRAKE</div>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+let W, H;
+
+function resize() {
+  W = canvas.width = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', () => setTimeout(resize, 120));
+resize();
+
+// ===== Game state =====
+let running = false;
+let isMultiplayer = false;
+let isHost = false;
+let player = null;
+let aiSnakes = [];
+let remotePlayers = {};
+let motes = [];
+let score = 0;
+let keys = {};
+let myPeerId = null;
+let myColor = null;
+let roomCode = null;
+
+// PeerJS
+let peer = null;
+let connections = {};
+let hostConn = null;
+
+// Joystick
+const joystick = { active: false, angle: 0, magnitude: 0, maxRadius: 46, touchId: null };
+let touchBoost = false;
+let touchBrake = false;
+
+const PLAYER_COLORS = [
+  '100,200,255',
+  '255,120,120',
+  '120,255,150',
+  '255,200,80',
+  '200,120,255',
+  '80,220,220'
+];
+
+// Prevent scroll
+document.addEventListener('touchmove', e => { if (running) e.preventDefault(); }, { passive: false });
+document.addEventListener('gesturestart', e => e.preventDefault());
+
+// Keyboard
+window.addEventListener('keydown', e => {
+  keys[e.key.toLowerCase()] = true;
+  if (['arrowup','arrowdown','arrowleft','arrowright',' '].includes(e.key.toLowerCase())) e.preventDefault();
+});
+window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+
+// ===== Short room code generator =====
+function generateShortCode(len = 5) {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 避開容易混淆的 I O 0 1
+  let code = '';
+  for (let i = 0; i < len; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return code;
+}
+
+// ===== UI helpers =====
+function showPanel(id) {
+  ['start-screen', 'join-panel', 'lobby', 'game-over'].forEach(p => {
+    document.getElementById(p).style.display = (p === id) ? 'block' : 'none';
+  });
+}
+function showMobileControls(show) {
+  document.getElementById('joystick-zone').style.display = show ? 'block' : 'none';
+  document.getElementById('action-buttons').style.display = show ? 'flex' : 'none';
+}
+function updateRoomHud(text) {
+  const el = document.getElementById('room-hud');
+  el.style.display = text ? 'block' : 'none';
+  el.textContent = text || '';
+}
+
+// ===== Joystick =====
+const zone = document.getElementById('joystick-zone');
+const knob = document.getElementById('joystick-knob');
+const base = document.getElementById('joystick-base');
+
+function getCenter() {
+  const r = base.getBoundingClientRect();
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+}
+function setKnob(dx, dy) {
+  const d = Math.sqrt(dx*dx + dy*dy);
+  const maxR = joystick.maxRadius;
+  let nx = dx, ny = dy;
+  if (d > maxR) { nx = dx/d*maxR; ny = dy/d*maxR; }
+  knob.style.transform = `translate(${nx}px,${ny}px)`;
+  joystick.magnitude = Math.min(d / maxR, 1);
+  if (joystick.magnitude > 0.1) joystick.angle = Math.atan2(ny, nx);
+}
+function resetKnob() {
+  knob.style.transform = 'translate(0,0)';
+  knob.classList.remove('active');
+  joystick.active = false;
+  joystick.magnitude = 0;
+  joystick.touchId = null;
+}
+
+zone.addEventListener('touchstart', e => {
+  e.preventDefault(); e.stopPropagation();
+  if (joystick.touchId !== null) return;
+  const t = e.changedTouches[0];
+  joystick.touchId = t.identifier;
+  joystick.active = true;
+  knob.classList.add('active');
+  const c = getCenter();
+  setKnob(t.clientX - c.x, t.clientY - c.y);
+}, { passive: false });
+
+window.addEventListener('touchmove', e => {
+  if (joystick.touchId === null) return;
+  for (const t of e.changedTouches) {
+    if (t.identifier === joystick.touchId) {
+      e.preventDefault();
+      const c = getCenter();
+      setKnob(t.clientX - c.x, t.clientY - c.y);
+      break;
+    }
+  }
+}, { passive: false });
+
+function endJoy(e) {
+  for (const t of e.changedTouches) {
+    if (t.identifier === joystick.touchId) { resetKnob(); break; }
+  }
+}
+window.addEventListener('touchend', endJoy);
+window.addEventListener('touchcancel', endJoy);
+
+let mouseDown = false;
+zone.addEventListener('mousedown', e => {
+  e.preventDefault();
+  mouseDown = true;
+  joystick.active = true;
+  knob.classList.add('active');
+  const c = getCenter();
+  setKnob(e.clientX - c.x, e.clientY - c.y);
+});
+window.addEventListener('mousemove', e => {
+  if (!mouseDown) return;
+  const c = getCenter();
+  setKnob(e.clientX - c.x, e.clientY - c.y);
+});
+window.addEventListener('mouseup', () => { if (mouseDown) { mouseDown = false; resetKnob(); } });
+
+function bindBtn(btn, press, release) {
+  const s = e => { e.preventDefault(); e.stopPropagation(); btn.classList.add('active'); press(); };
+  const e = ev => { ev.preventDefault(); btn.classList.remove('active'); release(); };
+  btn.addEventListener('touchstart', s, { passive: false });
+  btn.addEventListener('touchend', e, { passive: false });
+  btn.addEventListener('touchcancel', e, { passive: false });
+  btn.addEventListener('mousedown', s);
+  btn.addEventListener('mouseup', e);
+  btn.addEventListener('mouseleave', e);
+}
+bindBtn(document.getElementById('boost-btn'), () => touchBoost = true, () => touchBoost = false);
+bindBtn(document.getElementById('brake-btn'), () => touchBrake = true, () => touchBrake = false);
+
+// ===== Snake =====
+class Snake {
+  constructor(x, y, color, isPlayer = false, id = null) {
+    this.segments = [];
+    for (let i = 0; i < 12; i++) this.segments.push({ x: x - i * 8, y: y });
+    this.angle = Math.random() * Math.PI * 2;
+    this.speed = 2.8;
+    this.baseSpeed = 2.8;
+    this.boost = false;
+    this.brake = false;
+    this.color = color;
+    this.isPlayer = isPlayer;
+    this.alive = true;
+    this.turnSpeed = 0.075;
+    this.targetLength = 12;
+    this.id = id;
+  }
+  get head() { return this.segments[0]; }
+  get length() { return this.segments.length; }
+
+  updateLocal() {
+    if (!this.alive) return;
+    if (keys['a'] || keys['arrowleft']) this.angle -= this.turnSpeed;
+    if (keys['d'] || keys['arrowright']) this.angle += this.turnSpeed;
+    if (joystick.active && joystick.magnitude > 0.12) {
+      let desired = joystick.angle;
+      let diff = desired - this.angle;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      const mul = 0.95 + joystick.magnitude * 0.9;
+      this.angle += Math.sign(diff) * Math.min(Math.abs(diff), this.turnSpeed * mul);
+    }
+    this.boost = !!(keys['w'] || keys['arrowup'] || touchBoost);
+    this.brake = !!(keys['s'] || keys['arrowdown'] || touchBrake);
+
+    let spd = this.baseSpeed;
+    if (this.boost) spd *= 1.65;
+    if (this.brake) spd *= 0.45;
+    this.speed = spd;
+
+    const hx = this.head.x + Math.cos(this.angle) * this.speed;
+    const hy = this.head.y + Math.sin(this.angle) * this.speed;
+    this.segments.unshift({
+      x: ((hx % W) + W) % W,
+      y: ((hy % H) + H) % H
+    });
+    while (this.segments.length > this.targetLength) this.segments.pop();
+  }
+
+  applyRemote(data) {
+    this.alive = data.alive;
+    if (!this.alive) return;
+    this.angle = data.angle;
+    this.targetLength = data.len;
+    this.boost = data.boost;
+    const hx = data.x, hy = data.y;
+    this.segments = [{ x: hx, y: hy }];
+    let cx = hx, cy = hy;
+    const step = 8;
+    for (let i = 1; i < Math.min(data.len, 80); i++) {
+      cx -= Math.cos(this.angle) * step;
+      cy -= Math.sin(this.angle) * step;
+      this.segments.push({
+        x: ((cx % W) + W) % W,
+        y: ((cy % H) + H) % H
+      });
+    }
+  }
+
+  aiThink() {
+    let target = null, minD = Infinity;
+    for (const m of motes) {
+      const d = dist(this.head, m);
+      if (d < minD) { minD = d; target = m; }
+    }
+    if (target) {
+      const desired = Math.atan2(target.y - this.head.y, target.x - this.head.x);
+      let diff = desired - this.angle;
+      while (diff > Math.PI) diff -= Math.PI * 2;
+      while (diff < -Math.PI) diff += Math.PI * 2;
+      this.angle += Math.sign(diff) * Math.min(Math.abs(diff), this.turnSpeed * 1.2);
+    }
+    this.boost = Math.random() < 0.015;
+  }
+
+  grow(n = 3) {
+    this.targetLength = (this.targetLength || this.segments.length) + n;
+  }
+
+  draw() {
+    if (!this.alive) return;
+    for (let i = this.segments.length - 1; i >= 0; i--) {
+      const s = this.segments[i];
+      const r = Math.max(3.5, 9.5 - i * 0.07);
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, r, 0, Math.PI * 2);
+      const alpha = 1 - i / this.segments.length * 0.4;
+      ctx.fillStyle = `rgba(${this.color}, ${alpha})`;
+      ctx.fill();
+    }
+    ctx.beginPath();
+    ctx.arc(this.head.x, this.head.y, 11, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(${this.color}, 0.28)`;
+    ctx.fill();
+  }
+
+  getSyncData() {
+    return {
+      type: 'state',
+      id: this.id || myPeerId,
+      x: this.head.x,
+      y: this.head.y,
+      angle: this.angle,
+      len: this.targetLength,
+      alive: this.alive,
+      boost: this.boost,
+      color: this.color,
+      score: score
+    };
+  }
+}
+
+function dist(a, b) {
+  const dx = a.x - b.x, dy = a.y - b.y;
+  return Math.sqrt(dx*dx + dy*dy);
+}
+
+function spawnMote(x, y, value = 1) {
+  motes.push({
+    x: x ?? Math.random() * W,
+    y: y ?? Math.random() * H,
+    r: 3 + Math.random() * 2,
+    value,
+    color: `hsl(${Math.random()*60+40},80%,60%)`
+  });
+}
+
+function burstSnake(snake, isLocalPlayer = false) {
+  snake.alive = false;
+  for (let i = 0; i < snake.segments.length; i += 2) {
+    spawnMote(snake.segments[i].x, snake.segments[i].y, 2);
+  }
+  if (isLocalPlayer) {
+    endGame();
+    if (isMultiplayer) broadcast({ type: 'died', id: myPeerId });
+  }
+}
+
+// ===== Networking =====
+function destroyPeer() {
+  if (hostConn) { try { hostConn.close(); } catch(e){} hostConn = null; }
+  Object.values(connections).forEach(c => { try { c.close(); } catch(e){} });
+  connections = {};
+  if (peer) { try { peer.destroy(); } catch(e){} peer = null; }
+  myPeerId = null;
+  roomCode = null;
+  remotePlayers = {};
+  isHost = false;
+  isMultiplayer = false;
+}
+
+function setupHost(attempt = 0) {
+  destroyPeer();
+  isHost = true;
+  isMultiplayer = true;
+
+  const code = generateShortCode(5);
+  roomCode = code;
+
+  peer = new Peer(code, { debug: 0 });
+
+  peer.on('open', id => {
+    myPeerId = id;
+    roomCode = id;
+    document.getElementById('room-code').textContent = id;
+    document.getElementById('lobby-status').textContent = '房間已建立，分享代碼給朋友';
+    document.getElementById('lobby-start-btn').style.display = 'block';
+    document.getElementById('copy-btn').style.display = 'block';
+    updatePlayerList();
+  });
+
+  peer.on('connection', conn => {
+    connections[conn.peer] = conn;
+    conn.on('open', () => {
+      const used = new Set([myColor, ...Object.values(remotePlayers).map(p => p.color)]);
+      let col = PLAYER_COLORS.find(c => !used.has(c)) || PLAYER_COLORS[Math.floor(Math.random()*PLAYER_COLORS.length)];
+      conn.send({ type: 'welcome', yourColor: col, hostId: myPeerId });
+      updatePlayerList();
+      broadcast({ type: 'player_join', id: conn.peer, color: col }, conn.peer);
+    });
+    conn.on('data', data => handleData(data, conn.peer));
+    conn.on('close', () => {
+      delete connections[conn.peer];
+      delete remotePlayers[conn.peer];
+      broadcast({ type: 'player_leave', id: conn.peer });
+      updatePlayerList();
+    });
+  });
+
+  peer.on('error', err => {
+    if (err.type === 'unavailable-id' && attempt < 6) {
+      // 代碼被占用，換一個再試
+      setTimeout(() => setupHost(attempt + 1), 200);
+    } else {
+      document.getElementById('lobby-status').textContent = '錯誤: ' + (err.type || err);
+    }
+  });
+
+  myColor = PLAYER_COLORS[0];
+}
+
+function joinHost(code) {
+  destroyPeer();
+  isHost = false;
+  isMultiplayer = true;
+  const status = document.getElementById('join-status');
+  status.textContent = '連線中...';
+
+  const cleanCode = code.trim().toUpperCase();
+  peer = new Peer({ debug: 0 });
+
+  peer.on('open', id => {
+    myPeerId = id;
+    hostConn = peer.connect(cleanCode, { reliable: true });
+    hostConn.on('open', () => {
+      status.textContent = '已連上！等待房主開始...';
+      showPanel('lobby');
+      document.getElementById('room-code').textContent = cleanCode;
+      document.getElementById('lobby-status').textContent = '已加入房間，等待開始';
+      document.getElementById('lobby-start-btn').style.display = 'none';
+      document.getElementById('copy-btn').style.display = 'none';
+      updatePlayerList();
+    });
+    hostConn.on('data', data => handleData(data, cleanCode));
+    hostConn.on('close', () => {
+      alert('與房主斷線');
+      backToMenu();
+    });
+    hostConn.on('error', () => {
+      status.textContent = '連線失敗，請確認代碼正確';
+    });
+  });
+
+  peer.on('error', err => {
+    status.textContent = '錯誤: ' + (err.type || err);
+  });
+}
+
+function broadcast(data, excludeId = null) {
+  if (isHost) {
+    Object.entries(connections).forEach(([id, conn]) => {
+      if (id !== excludeId && conn.open) {
+        try { conn.send(data); } catch(e) {}
+      }
+    });
+  } else if (hostConn && hostConn.open) {
+    try { hostConn.send(data); } catch(e) {}
+  }
+}
+
+function handleData(data, fromId) {
+  if (!data || !data.type) return;
+  switch (data.type) {
+    case 'welcome':
+      myColor = data.yourColor;
+      break;
+    case 'player_join':
+      if (!remotePlayers[data.id]) {
+        remotePlayers[data.id] = { color: data.color, snake: null };
+      }
+      updatePlayerList();
+      break;
+    case 'player_leave':
+      delete remotePlayers[data.id];
+      updatePlayerList();
+      break;
+    case 'start':
+      startMultiplayerGame();
+      break;
+    case 'state':
+      if (data.id === myPeerId) break;
+      if (!remotePlayers[data.id]) {
+        remotePlayers[data.id] = { color: data.color, snake: null };
+      }
+      const rp = remotePlayers[data.id];
+      if (!rp.snake) {
+        rp.snake = new Snake(data.x, data.y, data.color, false, data.id);
+      }
+      rp.snake.applyRemote(data);
+      rp.color = data.color;
+      break;
+    case 'died':
+      if (remotePlayers[data.id] && remotePlayers[data.id].snake) {
+        remotePlayers[data.id].snake.alive = false;
+      }
+      break;
+  }
+}
+
+function updatePlayerList() {
+  const el = document.getElementById('player-list');
+  let html = `<div>👤 你 (${isHost ? '房主' : '玩家'})</div>`;
+  if (isHost) {
+    Object.keys(connections).forEach(id => {
+      html += `<div>👤 玩家 ${id.slice(0,6)}</div>`;
+    });
+  } else {
+    html += `<div>👤 房主</div>`;
+  }
+  el.innerHTML = html;
+}
+
+// ===== Game flow =====
+function initSingle() {
+  isMultiplayer = false;
+  isHost = false;
+  destroyPeer();
+  player = new Snake(W/2, H/2, PLAYER_COLORS[0], true);
+  player.targetLength = 12;
+  aiSnakes = [];
+  for (let i = 0; i < 5; i++) {
+    const ai = new Snake(Math.random()*W, Math.random()*H,
+      `${140+Math.random()*80},${70+Math.random()*60},${70+Math.random()*60}`);
+    ai.targetLength = 10 + Math.random()*14;
+    aiSnakes.push(ai);
+  }
+  motes = [];
+  for (let i = 0; i < 80; i++) spawnMote();
+  score = 0;
+  running = true;
+  showPanel(null);
+  document.getElementById('hud').style.display = 'block';
+  updateRoomHud('');
+  showMobileControls(true);
+  resetKnob();
+  touchBoost = touchBrake = false;
+}
+
+function startMultiplayerGame() {
+  player = new Snake(
+    W/2 + (Math.random()-0.5)*220,
+    H/2 + (Math.random()-0.5)*220,
+    myColor || PLAYER_COLORS[0],
+    true,
+    myPeerId
+  );
+  player.targetLength = 12;
+  aiSnakes = [];
+  remotePlayers = {};
+  motes = [];
+  for (let i = 0; i < 90; i++) spawnMote();
+  score = 0;
+  running = true;
+  showPanel(null);
+  document.getElementById('hud').style.display = 'block';
+  updateRoomHud(isHost ? '房主 · ' + roomCode : '連線中 · ' + roomCode);
+  showMobileControls(true);
+  resetKnob();
+  touchBoost = touchBrake = false;
+}
+
+function endGame() {
+  running = false;
+  document.getElementById('final-score').textContent = `Score: ${score}  |  Length: ${player ? player.length : 0}`;
+  showPanel('game-over');
+  document.getElementById('hud').style.display = 'none';
+  showMobileControls(false);
+  resetKnob();
+}
+
+function backToMenu() {
+  running = false;
+  destroyPeer();
+  showMobileControls(false);
+  document.getElementById('hud').style.display = 'none';
+  updateRoomHud('');
+  document.getElementById('copy-btn').style.display = 'block';
+  showPanel('start-screen');
+}
+
+// ===== Collision & eat =====
+function checkCollisions() {
+  if (!player || !player.alive) return;
+
+  for (const ai of aiSnakes) {
+    if (!ai.alive) continue;
+    for (let i = 4; i < ai.segments.length; i++) {
+      if (dist(player.head, ai.segments[i]) < 11) {
+        burstSnake(player, true);
+        return;
+      }
+    }
+    for (let i = 4; i < player.segments.length; i++) {
+      if (dist(ai.head, player.segments[i]) < 11) {
+        burstSnake(ai);
+        score += 40 + ai.length * 2;
+        break;
+      }
+    }
+  }
+
+  for (const id in remotePlayers) {
+    const rp = remotePlayers[id];
+    if (!rp.snake || !rp.snake.alive) continue;
+    for (let i = 3; i < rp.snake.segments.length; i++) {
+      if (dist(player.head, rp.snake.segments[i]) < 12) {
+        burstSnake(player, true);
+        return;
+      }
+    }
+  }
+
+  for (let i = 14; i < player.segments.length; i++) {
+    if (dist(player.head, player.segments[i]) < 9) player.speed *= 0.75;
+  }
+}
+
+function eatMotes(snake) {
+  for (let i = motes.length - 1; i >= 0; i--) {
+    if (dist(snake.head, motes[i]) < 13) {
+      snake.grow(motes[i].value + 1);
+      if (snake.isPlayer) score += motes[i].value * 10;
+      motes.splice(i, 1);
+    }
+  }
+}
+
+// ===== Main loop =====
+let lastBroadcast = 0;
+
+function update() {
+  if (!running) return;
+
+  if (player && player.alive) {
+    player.updateLocal();
+    eatMotes(player);
+  }
+
+  aiSnakes.forEach(s => {
+    if (s.alive) {
+      s.aiThink();
+      let spd = s.baseSpeed;
+      if (s.boost) spd *= 1.5;
+      s.speed = spd;
+      const hx = s.head.x + Math.cos(s.angle) * s.speed;
+      const hy = s.head.y + Math.sin(s.angle) * s.speed;
+      s.segments.unshift({ x: ((hx%W)+W)%W, y: ((hy%H)+H)%H });
+      while (s.segments.length > s.targetLength) s.segments.pop();
+      eatMotes(s);
+    }
+  });
+
+  checkCollisions();
+  while (motes.length < 70) spawnMote();
+  aiSnakes = aiSnakes.filter(s => s.alive);
+
+  if (isMultiplayer && player && player.alive) {
+    const now = performance.now();
+    if (now - lastBroadcast > 66) {
+      lastBroadcast = now;
+      broadcast(player.getSyncData());
+    }
+  }
+}
+
+function draw() {
+  ctx.fillStyle = '#0d0d0d';
+  ctx.fillRect(0, 0, W, H);
+
+  ctx.strokeStyle = 'rgba(40,40,50,0.28)';
+  ctx.lineWidth = 1;
+  const g = 80;
+  for (let x = 0; x < W; x += g) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+  for (let y = 0; y < H; y += g) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+
+  for (const m of motes) {
+    ctx.beginPath();
+    ctx.arc(m.x, m.y, m.r, 0, Math.PI*2);
+    ctx.fillStyle = m.color;
+    ctx.fill();
+  }
+
+  aiSnakes.forEach(s => s.draw());
+  for (const id in remotePlayers) {
+    const rp = remotePlayers[id];
+    if (rp.snake) rp.snake.draw();
+  }
+  if (player) player.draw();
+
+  if (player) {
+    document.getElementById('len').textContent = player.length;
+    document.getElementById('score').textContent = score;
+  }
+}
+
+function loop() {
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+loop();
+
+// ===== Button bindings =====
+document.getElementById('start-btn').onclick = () => initSingle();
+
+document.getElementById('create-btn').onclick = () => {
+  showPanel('lobby');
+  document.getElementById('lobby-status').textContent = '正在建立房間...';
+  document.getElementById('room-code').textContent = '----';
+  document.getElementById('lobby-start-btn').style.display = 'none';
+  document.getElementById('copy-btn').style.display = 'block';
+  setupHost();
+};
+
+document.getElementById('join-btn').onclick = () => {
+  showPanel('join-panel');
+  document.getElementById('join-status').textContent = '';
+  document.getElementById('join-code').value = '';
+};
+
+document.getElementById('back-join-btn').onclick = () => showPanel('start-screen');
+
+document.getElementById('do-join-btn').onclick = () => {
+  const code = document.getElementById('join-code').value.trim();
+  if (!code || code.length < 4) {
+    document.getElementById('join-status').textContent = '請輸入正確的代碼';
+    return;
+  }
+  joinHost(code);
+};
+
+document.getElementById('lobby-start-btn').onclick = () => {
+  if (!isHost) return;
+  broadcast({ type: 'start' });
+  startMultiplayerGame();
+};
+
+document.getElementById('leave-btn').onclick = () => backToMenu();
+
+document.getElementById('copy-btn').onclick = () => {
+  const code = document.getElementById('room-code').textContent;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(code).then(() => {
+      document.getElementById('lobby-status').textContent = '已複製！分享給朋友吧';
+    }).catch(() => prompt('複製此代碼：', code));
+  } else {
+    prompt('複製此代碼：', code);
+  }
+};
+
+document.getElementById('restart-btn').onclick = () => {
+  if (isMultiplayer) {
+    if (isHost) {
+      broadcast({ type: 'start' });
+      startMultiplayerGame();
+    } else {
+      showPanel('lobby');
+      document.getElementById('lobby-status').textContent = '等待房主重新開始...';
+    }
+  } else {
+    initSingle();
+  }
+};
+
+document.getElementById('menu-btn').onclick = () => backToMenu();
+
+// 讓加入輸入框自動轉大寫
+document.getElementById('join-code').addEventListener('input', function() {
+  this.value = this.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+});
+</script>
+</body>
+</html>
